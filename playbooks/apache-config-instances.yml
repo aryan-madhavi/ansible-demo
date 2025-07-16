@@ -1,0 +1,49 @@
+---
+- name: Install Apache on all machines
+  hosts: localhost, aws_ec2
+  gather_facts: true
+
+  vars:
+    ansible_ssh_private_key_file: "{{ playbook_dir }}/secrets/ssh-key.pem"
+    apache_win_url: https://www.apachelounge.com/download/VS17/binaries/httpd-2.4.64-250710-win64-VS17.zip
+    apache_win_path: C:\Apache24
+
+  tasks:
+    - name: Install Apache on Linux (localhost + EC2)
+      become: true
+      ansible.builtin.package:
+        name: httpd
+        state: present
+      when: ansible_facts['os_family'] == "RedHat"
+    - name: Ensure Apache is running on Linux (localhost + EC2)
+      become: true
+      ansible.builtin.service:
+        name: httpd
+        state: started
+        enabled: true
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Download Apache ZIP on Windows
+      ansible.windows.win_get_url:
+        url: "{{ apache_win_url }}"
+        dest: C:\Windows\Temp\httpd.zip
+      when: ansible_facts['os_family'] == "Windows"
+    - name: Extract Apache ZIP on Windows
+      community.windows.win_unzip:
+        src: C:\Windows\Temp\httpd.zip
+        dest: C:\
+      when: ansible_facts['os_family'] == "Windows"
+    - name: Install Apache as Windows Service
+      ansible.windows.win_shell: |
+        cd "{{ apache_win_path }}\\bin"
+        httpd.exe -k install
+      args:
+        executable: cmd
+      when: ansible_facts['os_family'] == "Windows"
+    - name: Ensure Apache is running on Windows
+      ansible.windows.win_service:
+        name: Apache2.4
+        state: started
+        start_mode: automatic
+      when: ansible_facts['os_family'] == "Windows"
+...
