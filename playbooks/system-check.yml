@@ -1,0 +1,114 @@
+---
+- name: Complete system check on linux instances
+  hosts: os_linux
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Show basic OS information
+      ansible.builtin.debug:
+        msg:
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }} ({{ ansible_distribution_release | default('N/A') }})"
+          - "Kernel: {{ ansible_kernel }}"
+          - "Architecture: {{ ansible_architecture }}"
+          - "Hostname: {{ ansible_hostname }}"
+          - "Uptime: {{ ansible_uptime_seconds }} seconds (~{{ (ansible_uptime_seconds // 3600) }} hours)"
+
+    - name: Check disk usage
+      ansible.builtin.command: df -h
+      register: disk_usage
+    - ansible.builtin.debug:
+        msg: "{{ disk_usage.stdout_lines }}"
+
+    - name: Check memory usage
+      ansible.builtin.command: free -m
+      register: mem_usage
+    - ansible.builtin.debug:
+        msg: "{{ mem_usage.stdout_lines }}"
+
+    - name: Check CPU load
+      ansible.builtin.command: uptime
+      register: cpu_load
+    - ansible.builtin.debug:
+        msg: "{{ cpu_load.stdout_lines }}"
+
+    - name: List network interfaces and IPs
+      ansible.builtin.command: ip -brief addr
+      register: net_info
+    - ansible.builtin.debug:
+        msg: "{{ net_info.stdout_lines }}"
+
+    - name: List running processes (top 5 by CPU)
+      ansible.builtin.shell: "ps aux --sort=-%cpu | head -n 6"
+      register: top_processes
+    - ansible.builtin.debug:
+        msg: "{{ top_processes.stdout_lines }}"
+
+
+- name: Complete system check on Windows hosts
+  hosts: os_windows
+  gather_facts: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../host_vars/{{ inventory_hostname }}/windows_password.yml"
+
+  tasks:
+    - name: Show basic OS information
+      ansible.windows.win_shell: |
+        $os=Get-CimInstance Win32_OperatingSystem
+        "OS: $($os.Caption) $($os.Version) ($($os.OSArchitecture))"
+        "Computer Name: $($os.CSName)"
+        "Boot Time: $($os.LastBootUpTime)"
+      register: win_os_info
+    - ansible.builtin.debug:
+        msg: "{{ win_os_info.stdout_lines }}"
+
+    - name: Show system architecture
+      ansible.windows.win_command: powershell -Command "[System.Environment]::Is64BitOperatingSystem"
+      register: arch
+    - ansible.builtin.debug:
+        msg: "64-bit OS: {{ arch.stdout }}"
+
+    - name: Show uptime
+      ansible.windows.win_command: powershell -Command "(Get-Date) - (gcim Win32_OperatingSystem).LastBootUpTime"
+      register: uptime
+    - ansible.builtin.debug:
+        msg: "System Uptime: {{ uptime.stdout }}"
+
+    - name: Check disk usage
+      ansible.windows.win_shell: |
+        Get-PSDrive -PSProvider 'FileSystem' | Select-Object Name, Used, Free, @{Name="Used(GB)";Expression={"{0:N2}" -f ($_.Used / 1GB)}}, @{Name="Free(GB)";Expression={"{0:N2}" -f ($_.Free / 1GB)}}
+      register: disk_info
+    - ansible.builtin.debug:
+        msg: "{{ disk_info.stdout_lines }}"
+
+    - name: Check memory usage
+      ansible.windows.win_shell: |
+        $os = Get-CimInstance Win32_OperatingSystem
+        "Total Visible Memory: $($os.TotalVisibleMemorySize) KB"
+        "Free Physical Memory: $($os.FreePhysicalMemory) KB"
+      register: mem_info
+    - ansible.builtin.debug:
+        msg: "{{ mem_info.stdout_lines }}"
+
+    - name: Check CPU load
+      ansible.windows.win_shell: |
+        Get-CimInstance Win32_Processor | Select-Object Name, LoadPercentage
+      register: cpu_info
+    - ansible.builtin.debug:
+        msg: "{{ cpu_info.stdout_lines }}"
+
+    - name: List network interfaces and IPs
+      ansible.windows.win_shell: |
+        Get-NetIPAddress | Where-Object {$_.AddressFamily -eq "IPv4"} | Select-Object InterfaceAlias, IPAddress
+      register: net_info
+    - ansible.builtin.debug:
+        msg: "{{ net_info.stdout_lines }}"
+
+    - name: List running processes (top 5 by CPU)
+      ansible.windows.win_shell: |
+        Get-Process | Sort-Object CPU -Descending | Select-Object -First 5 Name, CPU
+      register: top_processes
+    - ansible.builtin.debug:
+        msg: "{{ top_processes.stdout_lines }} "
+...

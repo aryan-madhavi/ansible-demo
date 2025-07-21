@@ -4,43 +4,52 @@
   gather_facts: false
 
   vars:
-    key_name: "First EC2 Instance - 19/06/2025"
+    key_name: "ansible-key-pair"
     region: ap-south-1
-
-  tasks:
-    - name: Launch EC2 instance with Linux Image
-      amazon.aws.ec2_instance:
-        name: linux-inst-ansible
-        key_name: "{{ key_name }}"
-        region: "{{ region }}"
+    security_group: sg-02d290fb435aa47d1
+    ec2_instances:
+      - name: linux-inst-ansible
         instance_type: t2.micro
         image_id: ami-0a1235697f4afa8a4
-        wait: true
         count: 1
-        security_group: sg-02d290fb435aa47d1
-        tags:
-          Creator: Ansible
-      register: ec2_linux
-
-    - name: Launch EC2 instance with Windows Image
-      amazon.aws.ec2_instance:
-        name: win-inst-ansible
-        key_name: "{{ key_name }}"
-        region: "{{ region }}"
+        os: linux
+        user_data: null
+      - name: win-inst-ansible
         instance_type: t3.micro
         image_id: ami-05b85154f69f6bcb3
-        wait: true
         count: 1
-        security_group: sg-02d290fb435aa47d1
+        os: windows
+        user_data: |
+          <powershell>
+          Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Force
+          $cert = New-SelfSignedCertificate -DnsName $env:COMPUTERNAME -CertStoreLocation Cert:\LocalMachine\My
+          New-Item -Path WSMan:\LocalHost\Listener -Transport HTTPS -Address * -CertificateThumbprint $cert.Thumbprint -Force
+          New-NetFirewallRule -Name "WinRM HTTPS" -DisplayName "WinRM over HTTPS" -Enabled True -Direction Inbound -Protocol TCP -LocalPort 5986 -Action Allow
+          Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true
+          Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true
+          Start-Service WinRM
+          Set-Service WinRM -StartupType Automatic
+          </powershell>
+
+  tasks:
+    - name: Launch EC2 instances
+      amazon.aws.ec2_instance:
+        name: "{{ item.name }}"
+        key_name: "{{ key_name }}"
+        region: "{{ region }}"
+        instance_type: "{{ item.instance_type }}"
+        image_id: "{{ item.image_id }}"
+        wait: true
+        count: "{{ item.count }}"
+        security_group: "{{ security_group }}"
         tags:
-          Creator: Ansible
-      register: ec2_win
+          creator: ansible
+          os: "{{ item.os }}"
+      loop: "{{ ec2_instances }}"
+      register: ec2_ip
 
-    - name: List Public IPv4 Addesses of linux instance
-      ansible.builtin.debug:
-        msg: "{{ ec2_linux.instances[0].instance_id }}:{{ ec2_linux.instances[0].public_ip_address }}"
-
-    - name: List Public IPv4 Addesses of windows instance
-      ansible.builtin.debug:
-        msg: "{{ ec2_win.instances[0].instance_id }}:{{ ec2_win.instances[0].public_ip_address }}"
+      # - name: List Public IPv4 Addesses of Instances
+      # ansible.builtin.debug:
+      #  msg: "{{ item.platform : item.instance_id : item.public_ip_address }}"
+      # loop: "{{ ec2_ip.results | map(attribute='instances') | flatten }}"
 ...

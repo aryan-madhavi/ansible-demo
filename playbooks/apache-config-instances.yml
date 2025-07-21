@@ -1,10 +1,13 @@
 ---
 - name: Install Apache on all machines
-  hosts: localhost, aws_ec2
+  hosts: aws_ec2
   gather_facts: true
 
+  vars_files:
+    - "{{ playbook_dir }}/../host_vars/{{ inventory_hostname }}/windows_password.yml"
+
   vars:
-    ansible_ssh_private_key_file: "{{ playbook_dir }}/secrets/ssh-key.pem"
+    apache_pkg_svc: "{{ 'httpd' if ansible_facts['os_family'] == 'RedHat' else 'apache2' }}"
     apache_win_url: https://www.apachelounge.com/download/VS17/binaries/httpd-2.4.64-250710-win64-VS17.zip
     apache_win_path: C:\Apache24
 
@@ -12,16 +15,16 @@
     - name: Install Apache on Linux (localhost + EC2)
       become: true
       ansible.builtin.package:
-        name: httpd
+        name: "{{ apache_pkg_svc }}"
         state: present
-      when: ansible_facts['os_family'] == "RedHat"
+      when: ansible_facts['os_family'] in ["RedHat", "Debian"]
     - name: Ensure Apache is running on Linux (localhost + EC2)
       become: true
       ansible.builtin.service:
-        name: httpd
+        name: "{{ apache_pkg_svc }}"
         state: started
         enabled: true
-      when: ansible_facts['os_family'] == "RedHat"
+      when: ansible_facts['os_family'] in ["RedHat", "Debian"]
 
     - name: Download Apache ZIP on Windows
       ansible.windows.win_get_url:
