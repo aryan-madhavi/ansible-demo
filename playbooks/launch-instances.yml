@@ -13,7 +13,7 @@
         image_id: ami-0a1235697f4afa8a4
         count: 1
         os: linux
-        user_data: null
+        user_data: ''
       - name: win-inst-ansible
         instance_type: t3.micro
         image_id: ami-05b85154f69f6bcb3
@@ -42,11 +42,12 @@
         wait: true
         count: "{{ item.count }}"
         security_group: "{{ security_group }}"
+        user_data: "{{ item.user_data }}"
         tags:
           creator: ansible
           os: "{{ item.os }}"
       loop: "{{ ec2_instances }}"
-      register: ec2_ip
+      register: ec2
 
       # - name: List Public IPv4 Addesses of Instances
       # ansible.builtin.debug:
