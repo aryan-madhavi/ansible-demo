@@ -22,13 +22,8 @@
         user_data: |
           <powershell>
           Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Force
-          $cert = New-SelfSignedCertificate -DnsName $env:COMPUTERNAME -CertStoreLocation Cert:\LocalMachine\My
-          New-Item -Path WSMan:\LocalHost\Listener -Transport HTTPS -Address * -CertificateThumbprint $cert.Thumbprint -Force
-          New-NetFirewallRule -Name "WinRM HTTPS" -DisplayName "WinRM over HTTPS" -Enabled True -Direction Inbound -Protocol TCP -LocalPort 5986 -Action Allow
-          Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true
-          Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true
-          Start-Service WinRM
-          Set-Service WinRM -StartupType Automatic
+          $scriptUrl = "https://raw.githubusercontent.com/ansible/ansible-documentation/ae8772176a5c645655c91328e93196bcf741732d/examples/scripts/ConfigureRemotingForAnsible.ps1"
+          Invoke-Expression (Invoke-WebRequest -Uri $scriptUrl -UseBasicParsing).Content
           </powershell>
 
   tasks:
